@@ -1,83 +1,88 @@
-# Dictionary 词典
+# Dictionary
 
-一个 [Omarchy](https://omarchy.org/) 的 shell 插件（Quickshell / QML），把当前
-选中的单词变成一条英汉词典释义，底层使用
-[`sdcv`](https://github.com/Dushistov/sdcv) 和
-[ECDICT](https://github.com/skywind3000/ECDICT) StarDict 词库。
+An [Omarchy](https://omarchy.org/) shell plugin (Quickshell / QML) that turns
+the current selection into an English → Chinese dictionary entry, using
+[`sdcv`](https://github.com/Dushistov/sdcv) with the
+[ECDICT](https://github.com/skywind3000/ECDICT) StarDict package.
 
-在任意位置选中一个单词，按 `Ctrl+Shift+S`，即可在浮层中查看释义；也可以交互式
-搜索、复制干净的词条，或把单词存入可直接导入 Anki 的生词本 —— 全程不需要终端弹窗。
+Select a word anywhere, hit `Ctrl+Shift+S`, and read the definition in an
+overlay. Search interactively, copy a clean entry, or save the word to an
+Anki-importable vocabulary — no terminal popup involved.
 
 ```
-┌─ 词典 ────────────────────────────────────── 查询 ─┐
-│ 单词                                                │
-│  ephemeral▏                                          │
-│ ┌── 匹配 ─────────┐ ┌── 释义 ─────────────────────┐ │
+┌─ Dictionary ──────────────────────────────── LOOKUP ─┐
+│ WORD                                                 │
+│  ephemeral▏                                           │
+│ ┌── matches ──────┐ ┌── definition ────────────────┐ │
 │ │ ephemeral       │ │ ephemeral                    │ │
 │ │ ECDICT          │ │ [ɪˈfemərəl]                  │ │
 │ │ ephemerally     │ │ a. 短暂的, 朝生暮死的          │ │
 │ │ ECDICT          │ │ n. 短命的东西                 │ │
 │ └─────────────────┘ └──────────────────────────────┘ │
-│      ↑/↓ 选择 · Enter 复制 · Ctrl+S 收藏 · Esc 关闭   │
+│      ↑/↓ select · Enter copy · Ctrl+S save · Esc close│
 └──────────────────────────────────────────────────────┘
 ```
 
-## 功能
+## Features
 
-- **查询选中内容** —— 读取主选区（primary selection）或剪贴板中最近被触碰的那一个，
-  并规整为单个查询词。
-- **交互式搜索** —— `Ctrl+Shift+D` 打开空白输入框，边输入边查询（带防抖）。
-- **逐级放宽匹配** —— 查询会自动升级：精确匹配 → 转小写后精确匹配 → 模糊建议，
-  因此 `Ephemeral` 和 `ephemera` 都能得到有用的结果。
-- **复制** —— `Enter` 复制「单词 + 音标 + 释义」的纯文本。
-- **收藏到生词本** —— `Ctrl+S` 以 `单词<TAB>释义` 追加写入 TSV，可直接导入 Anki
-  （换行以 `<br>` 保存）。
-- **感知最近来源** —— 若安装了共享的 `omarchy-dict` 辅助脚本，本插件会与
-  `dict-*` 脚本对「选区还是剪贴板被最后使用」保持一致。
+- **Look up the selection** — reads the primary selection or clipboard,
+  whichever you touched last, and normalizes it to a single lookup term.
+- **Interactive search** — `Ctrl+Shift+D` opens an empty field; type and the
+  definition updates as you go (debounced).
+- **Loosening lookup** — a query escalates automatically: exact match → exact
+  match lowercased → fuzzy suggestions, so `Ephemeral` and `ephemera` both
+  land somewhere useful.
+- **Copy** — `Enter` copies `word`, phonetic and definition as plain text.
+- **Save to vocabulary** — `Ctrl+S` appends `word<TAB>definition` to a TSV,
+  ready to import into Anki (newlines are stored as `<br>`).
+- **Recently-touched source** — when the shared `omarchy-dict` helper is
+  installed, the plugin agrees with the `dict-*` scripts on whether the
+  selection or the clipboard was used last.
 
-## 依赖
+## Requirements
 
-本插件属于第三方代码，在 Omarchy shell 进程中以你的用户权限**非沙箱**运行。它需要
-以下命令存在于 `PATH` 中：
+This plugin is third-party code that runs unsandboxed inside the Omarchy shell
+process. It shells out to the following tools, all of which must be on `PATH`:
 
-| 依赖 | 用途 | 来源 |
+| Dependency | Purpose | Source |
 | --- | --- | --- |
-| `sdcv` | 执行查询的 StarDict 命令行客户端 | `extra/sdcv` |
-| `stardict-ecdict` | 英汉 ECDICT 词库数据 | AUR |
-| `wl-clipboard` | `wl-copy` / `wl-paste`，用于读取选区和复制 | `extra/wl-clipboard` |
-| `bash`、coreutils | 运行 `selection.sh`、写入生词本 | 基础包 |
-| `omarchy-notification-send` | 保存 / 无结果通知 | Omarchy |
+| `sdcv` | StarDict console client that performs the lookups | `extra/sdcv` |
+| `stardict-ecdict` | The English → Chinese ECDICT dictionary data | AUR |
+| `wl-clipboard` | `wl-copy` / `wl-paste` for selection and copy | `extra/wl-clipboard` |
+| `bash`, coreutils | `selection.sh`, vocabulary writes | base |
+| `omarchy-notification-send` | Save/no-result notifications | Omarchy |
 
 ```sh
 sudo pacman -S sdcv wl-clipboard
 yay -S stardict-ecdict      # AUR
 ```
 
-`sdcv` 会自动在 `/usr/share/stardict/dic/` 下找到词库。安装插件前先确认它可用：
+`sdcv` finds the dictionary automatically under `/usr/share/stardict/dic/`.
+Confirm it works before installing the plugin:
 
 ```sh
 sdcv -n -j -e ephemeral
 ```
 
-## 安装
+## Installation
 
-### 使用 Omarchy 插件 CLI（推荐）
+### Via the Omarchy plugin CLI (recommended)
 
 ```sh
 omarchy plugin add https://github.com/NonMirror/nonmirror.dict --enable
 ```
 
-该命令会克隆仓库、校验 manifest、安装到
-`~/.config/omarchy/plugins/nonmirror.dict/` 并启用。
+This clones the repository, validates the manifest, installs it to
+`~/.config/omarchy/plugins/nonmirror.dict/`, and enables it.
 
-### 手动安装
+### Manual installation
 
 ```sh
 git clone https://github.com/NonMirror/nonmirror.dict \
   ~/.config/omarchy/plugins/nonmirror.dict
 ```
 
-然后在 `~/.config/omarchy/shell.json` 的 `plugins` 中加入：
+Then enable it in `~/.config/omarchy/shell.json` by adding it to `plugins`:
 
 ```json
 "plugins": [
@@ -85,40 +90,41 @@ git clone https://github.com/NonMirror/nonmirror.dict \
 ]
 ```
 
-保存 `shell.json` 后 shell 会自动热重载；如未生效，用
-`omarchy-shell shell rescanPlugins` 强制重新发现。
+The shell hot-reloads `shell.json` on save; force discovery with
+`omarchy-shell shell rescanPlugins` if needed.
 
-### 快捷键
+### Keybindings
 
-在 `~/.config/hypr/bindings.lua` 中绑定：
+Bind the hotkeys in `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("CTRL + SHIFT + S", "词典：查询选中内容",
+o.bind("CTRL + SHIFT + S", "Dictionary: look up selection",
   "omarchy-shell shell toggle nonmirror.dict '{\"mode\":\"lookup\"}'")
-o.bind("CTRL + SHIFT + D", "词典：搜索",
+o.bind("CTRL + SHIFT + D", "Dictionary: search",
   "omarchy-shell shell toggle nonmirror.dict '{\"mode\":\"search\"}'")
-o.bind("CTRL + SHIFT + ALT + S", "词典：收藏到生词本",
+o.bind("CTRL + SHIFT + ALT + S", "Dictionary: save word to vocabulary",
   "omarchy-shell shell summon nonmirror.dict '{\"mode\":\"save\"}'")
 ```
 
-然后重载：
+Then reload:
 
 ```sh
 hyprctl reload
 ```
 
-> **注意：** 在合成器层面绑定 `Ctrl+Shift+S` / `Ctrl+Shift+D` 会在应用获得焦点时
-> 遮蔽这两个组合键。如有影响，请改用其他快捷键。
+> **Note:** binding `Ctrl+Shift+S` / `Ctrl+Shift+D` at the compositor level
+> shadows those chords in applications while focused. Move them to other
+> bindings if that matters to you.
 
-## 卸载
+## Uninstallation
 
-### 使用 Omarchy 插件 CLI（推荐）
+### Via the Omarchy plugin CLI (recommended)
 
 ```sh
 omarchy plugin remove nonmirror.dict
 ```
 
-### 手动卸载
+### Manual removal
 
 ```sh
 omarchy plugin disable nonmirror.dict
@@ -126,83 +132,90 @@ rm -rf ~/.config/omarchy/plugins/nonmirror.dict
 omarchy-shell shell rescanPlugins
 ```
 
-再从 `~/.config/omarchy/shell.json` 中删除 `nonmirror.dict` 条目，并从
-`~/.config/hypr/bindings.lua` 中删除上面的三个绑定。
+Remove the `nonmirror.dict` block from `~/.config/omarchy/shell.json` and the
+three bindings above from `~/.config/hypr/bindings.lua`.
 
-插件不会在生词本之外创建任何状态，因此没有其他残留。如需连同生词本一起删除：
+The plugin never creates its own state outside the vocabulary file, so nothing
+else is left behind. To delete the saved words as well:
 
 ```sh
 rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-dict/vocab.tsv"
 ```
 
-## 使用
+## Usage
 
-| 按键 | 操作 |
+| Key | Action |
 | --- | --- |
-| `Ctrl+Shift+S` | 查询当前选区 / 剪贴板 |
-| `Ctrl+Shift+D` | 打开空白搜索框 |
-| `Ctrl+Shift+Alt+S` | 查询选中内容并收藏到生词本 |
-| 直接输入 | 编辑搜索框（防抖后自动查询） |
-| `↑` / `↓`、`Alt+J` / `Alt+K` | 在匹配结果间移动 |
-| `Enter` | 复制当前词条（若无结果则重新查询） |
-| `Ctrl+S` | 将当前词条收藏到生词本 |
-| `Ctrl+V` | 把剪贴板内容粘贴到搜索框 |
-| `Backspace`、`Ctrl+Backspace`、`Ctrl+U` | 编辑输入框 |
-| `Ctrl+Del` | 清空输入框 |
-| 点击匹配项 | 选中该项 |
-| `Esc` / 点击外部 | 关闭浮层 |
+| `Ctrl+Shift+S` | Look up the current selection / clipboard |
+| `Ctrl+Shift+D` | Open an empty search field |
+| `Ctrl+Shift+Alt+S` | Look up the selection and save it to the vocabulary |
+| type | Edit the search field (updates after a short debounce) |
+| `↑` / `↓`, `Alt+J` / `Alt+K` | Move through the matches |
+| `Enter` | Copy the current entry (or re-run the query if it produced nothing) |
+| `Ctrl+S` | Save the current entry to the vocabulary |
+| `Ctrl+V` | Paste the clipboard into the search field |
+| `Backspace`, `Ctrl+Backspace`, `Ctrl+U` | Edit the field |
+| `Ctrl+Del` | Clear the field |
+| click a match | Select it |
+| `Esc` / click outside | Close the overlay |
 
-复制和收藏会在标题栏显示一条简短状态，并通过 `omarchy-notification-send` 发送通知
-（重复操作会覆盖旧通知，不会堆积）。
+Copying and saving write a short status to the heading and post an
+`omarchy-notification-send` notification (overwritten on repeat, so saves do
+not pile up).
 
-### 调用模式
+### Modes
 
-也可以直接驱动插件，快捷键绑定的就是这些命令：
+The plugin can also be driven directly, which is what the keybindings do:
 
 ```sh
-# 查询选区 / 剪贴板
+# Look up the selection / clipboard
 omarchy-shell shell toggle nonmirror.dict '{"mode":"lookup"}'
 
-# 打开空白搜索框
+# Open an empty search field
 omarchy-shell shell toggle nonmirror.dict '{"mode":"search"}'
 
-# 查询选中内容并收藏
+# Look up the selection and save the entry
 omarchy-shell shell summon nonmirror.dict '{"mode":"save"}'
 
-# 查询指定单词
+# Look up an explicit term
 omarchy-shell shell toggle nonmirror.dict '{"mode":"lookup","term":"ephemeral"}'
 ```
 
-## 生词本 / Anki
+## Vocabulary / Anki
 
-收藏的单词写入以下制表符分隔文件：
+Saved words go to a tab-separated file:
 
 ```
 ${XDG_DATA_HOME:-~/.local/share}/omarchy-dict/vocab.tsv
 ```
 
-每行格式为 `单词<TAB>释义`，换行以 `<br>` 表示、HTML 实体已转义，与
-`~/.local/bin/dict-save` 和 `omarchy-dict` 辅助脚本保持一致，因此已有的导入流程
-可以继续使用。
+Each line is `term<TAB>definition`, with `<br>` standing in for line breaks
+and HTML entities escaped, matching `~/.local/bin/dict-save` and the
+`omarchy-dict` helper so existing imports keep working.
 
-在 Anki 中：**文件 → 导入**，选择 `vocab.tsv`，字段分隔符设为 **Tab**，并勾选
-**允许字段中使用 HTML**。这样释义中的 `<br>` 会渲染为换行，而不是字面文本。
+In Anki: **File → Import**, pick `vocab.tsv`, set the field separator to
+**Tab** and enable **Allow HTML in fields**. The definition's `<br>` tags then
+render as line breaks instead of literal text.
 
-## 实现原理
+## How it works
 
-- `Dict.qml` 负责浮层、按键处理与 `sdcv` 调用。查询严格串行：在上一次查询未完成时
-  输入的新词会被暂存，等当前查询结束后再执行，因此过期结果不会覆盖新结果。
-- `sdcv -n -j` 返回 JSON，QML 直接解析。精确匹配阶段会加上 `-e`；模糊建议会重新
-  排序，让你查询的词被选中，而不是排到最后。
-- `selection.sh` 输出要查询的词。若存在共享的
-  `${XDG_DATA_HOME:-~/.local/share}/omarchy-dict/lib.sh`，则复用它（包含
-  `dict-watch` 记录的主选区 / 剪贴板时间戳）；否则退化为「优先主选区，其次剪贴板」。
-- 插件是自包含的。`~/.local/bin/dict-*` 脚本和 `omarchy-dict/lib.sh` 都是可选的，
-  只有「最近来源」这一判断会用到它们。
+- `Dict.qml` owns the overlay, the key handling and the `sdcv` calls. Queries
+  run one at a time; a term typed while one is in flight is queued and run
+  when the current one finishes, so a stale result can never win.
+- `sdcv -n -j` returns JSON, which the QML parses directly. The exact-match
+  stage adds `-e`, and fuzzy suggestions are reordered so the term you asked
+  for is selected rather than buried at the end.
+- `selection.sh` prints the lookup term. If the shared
+  `${XDG_DATA_HOME:-~/.local/share}/omarchy-dict/lib.sh` helper exists it uses
+  it (including the `dict-watch` primary-vs-clipboard timestamps); otherwise
+  it falls back to the primary selection, then the clipboard.
+- The plugin is self-contained. The `~/.local/bin/dict-*` scripts and
+  `omarchy-dict/lib.sh` are optional; only the last-touched-source heuristic
+  makes use of them.
 
-## 开发
+## Development
 
-提交前先校验：
+Validate before committing:
 
 ```sh
 omarchy plugin validate ~/.config/omarchy/plugins/nonmirror.dict
@@ -210,18 +223,22 @@ qmllint -I "$OMARCHY_PATH/shell" \
   ~/.config/omarchy/plugins/nonmirror.dict/Dict.qml
 ```
 
-`~/.config/omarchy/plugins/` 下的改动会自动重载；可用
-`omarchy-shell shell rescanPlugins` 强制重新发现。
+Saved changes under `~/.config/omarchy/plugins/` reload automatically; use
+`omarchy-shell shell rescanPlugins` to force discovery.
 
-## 注意事项与限制
+## Notes and limits
 
-- 词库为**英译汉**；如需其他语言，请安装 `sdcv` 能识别的其他 StarDict 词库。
-- 浮层打开时会独占键盘（`WlrKeyboardFocus.Exclusive`），在关闭前上述之外的合成器
-  快捷键不可用。
-- `selection.sh` 会取选区第一行并去掉首尾标点；只有在存在共享的 `omarchy-dict`
-  辅助脚本时，多词选区才会退化为其中最长的单词。
-- 生词本在插件侧是只追加的；如需去重请手动编辑。
+- The dictionary is **English → Chinese**; other languages work only if you
+  install additional StarDict dictionaries that `sdcv` picks up.
+- The overlay grabs the keyboard exclusively while open
+  (`WlrKeyboardFocus.Exclusive`), so compositor shortcuts other than the ones
+  above are not available until it closes.
+- `selection.sh` trims the selection to its first line and strips surrounding
+  punctuation before looking it up; multi-word selections become the longest
+  word only when the shared `omarchy-dict` helper is present.
+- The vocabulary file is append-only from the plugin's side; de-duplicate or
+  edit it by hand if needed.
 
-## 许可证
+## License
 
-MIT —— 见 [LICENSE](LICENSE)。
+MIT — see [LICENSE](LICENSE).
