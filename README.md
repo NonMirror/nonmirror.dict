@@ -40,13 +40,9 @@ process. It shells out to the following tools, all of which must be on `PATH`:
 | `bash`, coreutils | `selection.sh`, vocabulary writes | base |
 | `omarchy-notification-send` | Save/no-result notifications | Omarchy |
 
-```sh
-sudo pacman -S sdcv wl-clipboard
-yay -S stardict-ecdict      # AUR
-```
-
-`sdcv` finds the dictionary automatically under `/usr/share/stardict/dic/`.
-Confirm it works before installing the plugin:
+Install the packages listed above from their repositories using your usual
+tooling. `sdcv` finds the dictionary automatically under
+`/usr/share/stardict/dic/`. Confirm it works before installing the plugin:
 
 ```sh
 sdcv -n -j -e ephemeral
@@ -65,10 +61,8 @@ This clones the repository, validates the manifest, installs it to
 
 ### Manual installation
 
-```sh
-git clone https://github.com/NonMirror/nonmirror.dict \
-  ~/.config/omarchy/plugins/nonmirror.dict
-```
+If you install plugins by hand, download this repository and place its
+contents in `~/.config/omarchy/plugins/nonmirror.dict/`.
 
 Then enable it in `~/.config/omarchy/shell.json` by adding it to `plugins`:
 
