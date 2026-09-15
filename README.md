@@ -41,11 +41,16 @@ Anki-importable vocabulary — no terminal popup involved.
 
 ## Requirements
 
-- [Omarchy](https://omarchy.org/) with the Quickshell-based shell
-- `sdcv` — StarDict console client (`extra/sdcv`)
-- `stardict-ecdict` — the ECDICT dictionary data (AUR)
-- `wl-clipboard` — `wl-copy` / `wl-paste`
-- `bash`, coreutils
+This plugin is third-party code that runs unsandboxed inside the Omarchy shell
+process. It shells out to the following tools, all of which must be on `PATH`:
+
+| Dependency | Purpose | Source |
+| --- | --- | --- |
+| `sdcv` | StarDict console client that performs the lookups | `extra/sdcv` |
+| `stardict-ecdict` | The English → Chinese ECDICT dictionary data | AUR |
+| `wl-clipboard` | `wl-copy` / `wl-paste` for selection and copy | `extra/wl-clipboard` |
+| `bash`, coreutils | `selection.sh`, vocabulary writes | base |
+| `omarchy-notification-send` | Save/no-result notifications | Omarchy |
 
 ```sh
 sudo pacman -S sdcv wl-clipboard
@@ -53,26 +58,42 @@ yay -S stardict-ecdict      # AUR
 ```
 
 `sdcv` finds the dictionary automatically under `/usr/share/stardict/dic/`.
-To check it works:
+Confirm it works before installing the plugin:
 
 ```sh
 sdcv -n -j -e ephemeral
 ```
 
-## Install
+## Installation
+
+### Via the Omarchy plugin CLI (recommended)
+
+```sh
+omarchy plugin add https://github.com/NonMirror/nonmirror.dict --enable
+```
+
+This clones the repository, validates the manifest, installs it to
+`~/.config/omarchy/plugins/nonmirror.dict/`, and enables it.
+
+### Manual installation
 
 ```sh
 git clone https://github.com/NonMirror/nonmirror.dict \
   ~/.config/omarchy/plugins/nonmirror.dict
 ```
 
-Enable it in `~/.config/omarchy/shell.json` by adding it to `plugins`:
+Then enable it in `~/.config/omarchy/shell.json` by adding it to `plugins`:
 
 ```json
 "plugins": [
   { "id": "nonmirror.dict" }
 ]
 ```
+
+The shell hot-reloads `shell.json` on save; force discovery with
+`omarchy-shell shell rescanPlugins` if needed.
+
+### Keybindings
 
 Bind the hotkeys in `~/.config/hypr/bindings.lua`:
 
@@ -89,12 +110,37 @@ Then reload:
 
 ```sh
 hyprctl reload
-omarchy restart shell
 ```
 
 > **Note:** binding `Ctrl+Shift+S` / `Ctrl+Shift+D` at the compositor level
 > shadows those chords in applications while focused. Move them to other
 > bindings if that matters to you.
+
+## Uninstallation
+
+### Via the Omarchy plugin CLI (recommended)
+
+```sh
+omarchy plugin remove nonmirror.dict
+```
+
+### Manual removal
+
+```sh
+omarchy plugin disable nonmirror.dict
+rm -rf ~/.config/omarchy/plugins/nonmirror.dict
+omarchy-shell shell rescanPlugins
+```
+
+Remove the `nonmirror.dict` block from `~/.config/omarchy/shell.json` and the
+three bindings above from `~/.config/hypr/bindings.lua`.
+
+The plugin never creates its own state outside the vocabulary file, so nothing
+else is left behind. To delete the saved words as well:
+
+```sh
+rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-dict/vocab.tsv"
+```
 
 ## Usage
 
@@ -167,13 +213,26 @@ render as line breaks instead of literal text.
   `omarchy-dict/lib.sh` are optional; only the last-touched-source heuristic
   makes use of them.
 
+## Development
+
+Validate before committing:
+
+```sh
+omarchy plugin validate ~/.config/omarchy/plugins/nonmirror.dict
+qmllint -I "$OMARCHY_PATH/shell" \
+  ~/.config/omarchy/plugins/nonmirror.dict/Dict.qml
+```
+
+Saved changes under `~/.config/omarchy/plugins/` reload automatically; use
+`omarchy-shell shell rescanPlugins` to force discovery.
+
 ## Notes and limits
 
 - The dictionary is **English → Chinese**; other languages work only if you
   install additional StarDict dictionaries that `sdcv` picks up.
-- The overlay grabs the keyboard exclusively while open (`WlrKeyboardFocus.
-  Exclusive`), so compositor shortcuts other than the ones above are not
-  available until it closes.
+- The overlay grabs the keyboard exclusively while open
+  (`WlrKeyboardFocus.Exclusive`), so compositor shortcuts other than the ones
+  above are not available until it closes.
 - `selection.sh` trims the selection to its first line and strips surrounding
   punctuation before looking it up; multi-word selections become the longest
   word only when the shared `omarchy-dict` helper is present.
