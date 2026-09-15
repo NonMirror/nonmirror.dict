@@ -59,8 +59,8 @@ Item {
   property int contentMargin: Style.spacing.panelPadding
   property int fieldHeight: Math.max(Style.space(38), Style.font.body + Style.spacing.controlPaddingY * 2)
   property int rowHeight: Math.max(Style.space(44), Style.font.body + Style.font.caption + Style.spacing.xs * 3)
-  property int cardWidth: Math.min(Style.space(880), panel.width - Style.gapsOut * 2)
-  property int cardHeight: Math.min(Style.space(620), panel.height - Style.gapsOut * 2)
+  property int cardWidth: Math.min(Style.space(570), panel.width - Style.gapsOut * 2)
+  property int cardHeight: Math.min(Style.space(500), panel.height - Style.gapsOut * 2)
 
   // --------------------------------------------------------------- lifecycle
 
@@ -637,7 +637,7 @@ Item {
             text: "Searching…"
             color: root.faint
             font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.bodySmall
           }
 
           Text {
@@ -647,7 +647,7 @@ Item {
             color: root.selectedText
             opacity: 0.85
             font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.bodySmall
           }
         }
 
@@ -658,7 +658,7 @@ Item {
           text: "WORD"
           color: root.faint
           font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
+          font.pixelSize: Style.font.bodySmall
           font.letterSpacing: 1
         }
 
@@ -688,7 +688,7 @@ Item {
               : root.singleLine(root.term) + (root.cursorVisible ? "▏" : "")
             color: root.term === "" ? root.faint : root.foreground
             font.family: root.fontFamily
-            font.pixelSize: Style.font.body
+            font.pixelSize: Style.font.title
             elide: Text.ElideLeft
           }
         }
@@ -700,7 +700,7 @@ Item {
           spacing: Style.spacing.md
 
           Rectangle {
-            Layout.preferredWidth: Style.space(240)
+            Layout.preferredWidth: Style.space(160)
             Layout.fillHeight: true
             radius: root.cornerRadius
             color: Util.alpha(root.selectedBackground, 0.28)
@@ -813,7 +813,7 @@ Item {
                   }
                   color: root.foreground
                   font.family: root.fontFamily
-                  font.pixelSize: Style.font.heading
+                  font.pixelSize: Style.font.display
                   font.weight: Font.Medium
                   wrapMode: Text.Wrap
                 }
@@ -841,7 +841,7 @@ Item {
                   }
                   color: root.foreground
                   font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
+                  font.pixelSize: Style.font.subtitle
                   lineHeight: 1.25
                   wrapMode: Text.Wrap
                 }
