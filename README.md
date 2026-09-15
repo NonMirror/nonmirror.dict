@@ -9,19 +9,7 @@ Select a word anywhere, hit `Ctrl+Shift+S`, and read the definition in an
 overlay. Search interactively, copy a clean entry, or save the word to an
 Anki-importable vocabulary — no terminal popup involved.
 
-```
-┌─ Dictionary ──────────────────────────────── LOOKUP ─┐
-│ WORD                                                 │
-│  ephemeral▏                                           │
-│ ┌── matches ──────┐ ┌── definition ────────────────┐ │
-│ │ ephemeral       │ │ ephemeral                    │ │
-│ │ ECDICT          │ │ [ɪˈfemərəl]                  │ │
-│ │ ephemerally     │ │ a. 短暂的, 朝生暮死的          │ │
-│ │ ECDICT          │ │ n. 短命的东西                 │ │
-│ └─────────────────┘ └──────────────────────────────┘ │
-│      ↑/↓ select · Enter copy · Ctrl+S save · Esc close│
-└──────────────────────────────────────────────────────┘
-```
+![The Dictionary overlay showing the lookup for "anthropic"](preview.png)
 
 ## Features
 
