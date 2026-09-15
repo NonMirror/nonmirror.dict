@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "nonmirror.dict",
+  "name": "Dictionary",
+  "version": "1.0.0",
+  "author": "nonmirror",
+  "license": "MIT",
+  "description": "English -> Chinese dictionary (sdcv + ECDICT): look up the selection, search interactively, and save words to an Anki vocabulary",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Dict.qml"
+  }
+}
