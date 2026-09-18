@@ -36,7 +36,10 @@ Item {
   property string statusText: ""
   property bool cursorVisible: true
 
-  property string selectScript: (Quickshell.env("HOME") || "") + "/.config/omarchy/plugins/nonmirror.dict/selection.sh"
+  property string ioScript: decodeURIComponent(Qt.resolvedUrl("bounded_io.py").toString().replace(/^file:\/\//, ""))
+  readonly property int termByteLimit: 1024
+  property bool reopenPending: false
+  property string reopenPayload: ""
   property string vocabPath: {
     var base = Quickshell.env("XDG_DATA_HOME")
     if (!base || base === "") base = (Quickshell.env("HOME") || "") + "/.local/share"
@@ -65,6 +68,14 @@ Item {
   // --------------------------------------------------------------- lifecycle
 
   function open(payloadJson) {
+    // Let cancelled helpers finish killing and reaping their producer groups
+    // before reusing Process objects for a newly opened overlay.
+    root.close()
+    if (captureProc.running || queryProc.running || pasteProc.running) {
+      root.reopenPayload = payloadJson
+      root.reopenPending = true
+      return
+    }
     var payload = root.parsePayload(payloadJson)
     var requested = String(payload.mode || "")
     root.mode = ["lookup", "search", "save"].indexOf(requested) >= 0 ? requested : "lookup"
@@ -76,26 +87,36 @@ Item {
     root.noResults = false
     root.statusText = root.mode === "search" ? "Type to search" : ""
     root.opened = true
+    root.term = ""
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
 
     var provided = payload.term !== undefined && payload.term !== null ? String(payload.term) : ""
     if (root.mode === "search" && provided === "") {
       root.term = ""
     } else if (provided !== "") {
+      if (!root.acceptTerm(provided)) return
       root.term = provided
       root.runQuery(provided)
     } else {
       root.term = ""
       root.beginCapture()
     }
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
   function close() {
     root.opened = false
+    root.reopenPending = false
+    root.busy = false
+    root.pending = false
+    root.pendingTerm = ""
+    queryDebounce.stop()
+    if (captureProc.running) captureProc.signal(15)
+    if (queryProc.running) queryProc.signal(15)
+    if (pasteProc.running) pasteProc.signal(15)
   }
 
   function dismiss() {
-    root.opened = false
+    root.close()
     if (root.shell && typeof root.shell.hide === "function")
       root.shell.hide((root.manifest && root.manifest.id) || "nonmirror.dict")
   }
@@ -129,19 +150,17 @@ Item {
   function beginCapture() {
     root.busy = true
     root.statusText = root.mode === "search" ? "Type to search" : "Reading selection…"
-    captureProc.outText = ""
-    captureProc.command = ["bash", root.selectScript]
+    captureProc.command = ["python3", "-I", root.ioScript, "selection"]
     captureProc.running = true
   }
 
   // ------------------------------------------------------------- querying
 
-  // Queries are strictly sequential: sdcv answers in milliseconds, and not
-  // killing a process keeps the collector from reporting a half-read result
-  // for a term the user has already moved past. A term typed while one query
-  // is in flight is remembered and run when that one finishes.
+  // Each stage has a five-second deadline in the helper. Queries remain
+  // sequential, with at most one pending term and no partial results.
   function requestQuery(rawTerm) {
     var t = String(rawTerm === undefined || rawTerm === null ? "" : rawTerm).trim()
+    if (!root.acceptTerm(t)) return
     if (root.busy) {
       root.pending = true
       root.pendingTerm = t
@@ -152,6 +171,12 @@ Item {
 
   function runQuery(rawTerm) {
     var t = String(rawTerm === undefined || rawTerm === null ? "" : rawTerm).trim()
+    if (!root.acceptTerm(t)) return
+    if (captureProc.running || queryProc.running) {
+      root.pending = true
+      root.pendingTerm = t
+      return
+    }
     root.queryTerm = t
     root.queryStage = 0
     root.queryFuzzy = false
@@ -169,15 +194,49 @@ Item {
   }
 
   function beginStage() {
+    if (!root.opened) return
     var t = root.queryTerm
-    var args = ["sdcv", "-n", "-j"]
-    if (root.queryStage !== 2) args.push("-e")
-    args.push(root.queryStage === 1 ? t.toLowerCase() : t)
     root.queryFuzzy = root.queryStage === 2
-    queryProc.outText = ""
-    queryProc.errText = ""
-    queryProc.command = args
+    queryProc.command = ["python3", "-I", root.ioScript, "query",
+      root.queryFuzzy ? "fuzzy" : "exact", root.queryStage === 1 ? t.toLowerCase() : t]
     queryProc.running = true
+  }
+
+  function acceptTerm(value) {
+    // Bound typed, pasted, queued, and IPC-provided terms in UTF-8 bytes.
+    var valid = false
+    if (value.length <= root.termByteLimit && value.indexOf("\u0000") < 0) {
+      try {
+        valid = encodeURIComponent(value).replace(/%[0-9A-F]{2}/g, "x").length <= root.termByteLimit
+      } catch (e) {}
+    }
+    if (!valid) root.statusText = "Search text is too long or invalid"
+    return valid
+  }
+
+  function processError(exitCode) {
+    if (exitCode === 65) return "Input or response exceeds the size limit"
+    if (exitCode === 124) return "Operation timed out"
+    if (exitCode === 66) return "Invalid text received"
+    return "Could not read selection or dictionary"
+  }
+
+  function failQuery(exitCode) {
+    root.busy = false
+    root.matches = []
+    root.noResults = false
+    root.statusText = root.processError(exitCode)
+    if (root.mode === "save") root.mode = "lookup"
+    root.resumePending()
+  }
+
+  function resumePending() {
+    if (!root.pending) return false
+    var t = root.pendingTerm
+    root.pending = false
+    root.pendingTerm = ""
+    Qt.callLater(function() { if (root.opened) root.requestQuery(t) })
+    return true
   }
 
   function parseEntries(raw) {
@@ -202,13 +261,7 @@ Item {
   function completeQuery(entries) {
     root.busy = false
 
-    if (root.pending) {
-      var t = root.pendingTerm
-      root.pending = false
-      root.pendingTerm = ""
-      Qt.callLater(function() { root.requestQuery(t) })
-      return
-    }
+    if (root.resumePending()) return
 
     if (entries.length === 0) {
       root.matches = []
@@ -342,6 +395,7 @@ Item {
   }
 
   function setTerm(value) {
+    if (!root.acceptTerm(String(value))) return
     root.term = String(value)
     if (root.mode === "save") root.mode = "lookup"
     root.selectedIndex = 0
@@ -429,6 +483,19 @@ Item {
   }
 
   Timer {
+    interval: 25
+    repeat: true
+    running: root.reopenPending
+    onTriggered: {
+      if (!captureProc.running && !queryProc.running && !pasteProc.running) {
+        var payload = root.reopenPayload
+        root.reopenPending = false
+        root.open(payload)
+      }
+    }
+  }
+
+  Timer {
     id: statusTimer
     interval: 2400
     onTriggered: root.statusText = ""
@@ -450,16 +517,21 @@ Item {
   // Captures the selection before the first query on the lookup/save paths.
   Process {
     id: captureProc
-    property string outText: ""
+    // Only the bounded helper writes to these collectors. Failed operations
+    // are rejected before their text is read, parsed, or rendered.
     stdout: StdioCollector {
       id: captureOut
       waitForEnd: true
-      onStreamFinished: captureProc.outText = text
     }
     onExited: function(exitCode, exitStatus) {
       if (!root.opened) return
-      var captured = String(captureProc.outText !== "" ? captureProc.outText : captureOut.text).trim()
+      if (exitCode !== 0 || exitStatus !== 0) {
+        root.failQuery(exitCode)
+        return
+      }
+      var captured = String(captureOut.text).trim()
       root.busy = false
+      if (root.resumePending()) return
       if (captured === "") {
         root.mode = "search"
         root.term = ""
@@ -476,21 +548,22 @@ Item {
   // One sdcv call at a time; stages escalate from exact to fuzzy.
   Process {
     id: queryProc
-    property string outText: ""
-    property string errText: ""
     stdout: StdioCollector {
       id: queryOut
       waitForEnd: true
-      onStreamFinished: queryProc.outText = text
-    }
-    stderr: StdioCollector {
-      id: queryErr
-      waitForEnd: true
-      onStreamFinished: queryProc.errText = text
     }
     onExited: function(exitCode, exitStatus) {
-      if (!root.busy) return
-      var entries = root.parseEntries(queryProc.outText !== "" ? queryProc.outText : queryOut.text)
+      if (!root.opened || !root.busy) return
+      if (exitCode !== 0 || exitStatus !== 0) {
+        root.failQuery(exitCode)
+        return
+      }
+      if (root.pending) {
+        root.busy = false
+        root.resumePending()
+        return
+      }
+      var entries = root.parseEntries(queryOut.text)
       if (entries.length > 0) {
         root.completeQuery(entries)
         return
@@ -516,10 +589,13 @@ Item {
       id: pasteOut
       waitForEnd: true
     }
-    // wl-paste --no-newline
-    command: ["wl-paste", "--no-newline", "--type", "text/plain"]
+    command: ["python3", "-I", root.ioScript, "paste"]
     onExited: function(exitCode, exitStatus) {
-      if (!root.opened || exitCode !== 0) return
+      if (!root.opened) return
+      if (exitCode !== 0 || exitStatus !== 0) {
+        root.statusText = root.processError(exitCode)
+        return
+      }
       var pasted = String(pasteOut.text)
       if (pasted === "") return
       root.setTerm(root.term + pasted)

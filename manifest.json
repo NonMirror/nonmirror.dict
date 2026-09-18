@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "nonmirror.dict",
   "name": "Dictionary",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "nonmirror",
   "license": "MIT",
   "description": "English -> Chinese dictionary (sdcv + ECDICT): look up the selection, search interactively, and save words to an Anki vocabulary",

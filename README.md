@@ -23,9 +23,8 @@ Anki-importable vocabulary — no terminal popup involved.
 - **Copy** — `Enter` copies `word`, phonetic and definition as plain text.
 - **Save to vocabulary** — `Ctrl+S` appends `word<TAB>definition` to a TSV,
   ready to import into Anki (newlines are stored as `<br>`).
-- **Recently-touched source** — when the shared `omarchy-dict` helper is
-  installed, the plugin agrees with the `dict-*` scripts on whether the
-  selection or the clipboard was used last.
+- **Recently-touched source** — when `dict-watch` timestamps are available,
+  the plugin prefers whichever source was touched last.
 
 ## Requirements
 
@@ -38,6 +37,7 @@ process. It shells out to the following tools, all of which must be on `PATH`:
 | `stardict-ecdict` | The English → Chinese ECDICT dictionary data | AUR |
 | `wl-clipboard` | `wl-copy` / `wl-paste` for selection and copy | `extra/wl-clipboard` |
 | `bash`, coreutils | `selection.sh`, vocabulary writes | base |
+| `python` (Python 3) | Bounded clipboard and dictionary subprocess helper; standard library only | `core/python` |
 | `omarchy-notification-send` | Save/no-result notifications | Omarchy |
 
 Install the packages listed above from their repositories using your usual
@@ -184,16 +184,38 @@ render as line breaks instead of literal text.
 - `Dict.qml` owns the overlay, the key handling and the `sdcv` calls. Queries
   run one at a time; a term typed while one is in flight is queued and run
   when the current one finishes, so a stale result can never win.
-- `sdcv -n -j` returns JSON, which the QML parses directly. The exact-match
+- `sdcv -n -j` returns JSON, which the QML parses after the bounded helper
+  has accepted the complete response. The exact-match
   stage adds `-e`, and fuzzy suggestions are reordered so the term you asked
   for is selected rather than buried at the end.
-- `selection.sh` prints the lookup term. If the shared
-  `${XDG_DATA_HOME:-~/.local/share}/omarchy-dict/lib.sh` helper exists it uses
-  it (including the `dict-watch` primary-vs-clipboard timestamps); otherwise
-  it falls back to the primary selection, then the clipboard.
-- The plugin is self-contained. The `~/.local/bin/dict-*` scripts and
-  `omarchy-dict/lib.sh` are optional; only the last-touched-source heuristic
-  makes use of them.
+- `bounded_io.py` reads selection, explicit paste, and dictionary output
+  under byte limits and deadlines. `selection.sh` is a compatibility wrapper
+  for its selection mode; clipboard data is never stored in shell variables.
+- Source preference uses the modification times of `primary.time` and
+  `clipboard.time` under `${XDG_CACHE_HOME:-~/.cache}/omarchy-dict/` when
+  both exist, otherwise primary selection is preferred. Empty/unavailable
+  text falls back to the other source. The plugin reads these timestamps
+  but never writes them or executes the optional `omarchy-dict/lib.sh`.
+
+### Resource limits
+
+| Data / operation | Limit |
+| --- | --- |
+| Each selection or clipboard read | 4 KiB of stdout, 8 KiB of stderr, 1 second |
+| Entire selection operation, including fallback | 2 seconds |
+| Each dictionary stage | 256 KiB of stdout, 8 KiB of stderr, 5 seconds |
+| Search field / lookup term | 1,024 UTF-8 bytes |
+
+Limits apply before normalization, JSON parsing, or rendering. An oversized
+response is rejected entirely; it is never silently truncated. A failed or
+timed-out dictionary stage stops that lookup instead of escalating to fuzzy
+search. Every producer runs in a separate process group: cleanup sends
+`SIGTERM`, then `SIGKILL` after a 100 ms grace period, and reaps the producer
+and adopted descendants. The grace period is the only scheduled extension
+past an operation's deadline. Closing the overlay also cancels active reads.
+
+See [the security fix explanation](SECURITY-FIX.md) for the original failure
+mode, implementation details, and reproducible regression tests.
 
 ## Development
 
@@ -201,12 +223,19 @@ Validate before committing:
 
 ```sh
 omarchy plugin validate ~/.config/omarchy/plugins/nonmirror.dict
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 qmllint -I "$OMARCHY_PATH/shell" \
   ~/.config/omarchy/plugins/nonmirror.dict/Dict.qml
 ```
 
 Saved changes under `~/.config/omarchy/plugins/` reload automatically; use
 `omarchy-shell shell rescanPlugins` to force discovery.
+
+The regression tests use fake producer processes, so they do not read or
+change your clipboard. With Quickshell installed, they also exercise the
+production QML controller and process handlers using an offscreen harness.
+`qmllint` may report unresolved `qs.*` imports because these are provided
+by the running Omarchy shell; it is not a substitute for runtime tests.
 
 ## Notes and limits
 
@@ -215,9 +244,10 @@ Saved changes under `~/.config/omarchy/plugins/` reload automatically; use
 - The overlay grabs the keyboard exclusively while open
   (`WlrKeyboardFocus.Exclusive`), so compositor shortcuts other than the ones
   above are not available until it closes.
-- `selection.sh` trims the selection to its first line and strips surrounding
-  punctuation before looking it up; multi-word selections become the longest
-  word only when the shared `omarchy-dict` helper is present.
+- Selection capture trims to the first line and strips surrounding
+  punctuation; selections containing more than four words use the longest
+  word. This normalization is applied only after the entire read passes
+  the byte limit.
 - The vocabulary file is append-only from the plugin's side; de-duplicate or
   edit it by hand if needed.
 
